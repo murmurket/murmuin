@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",          // CommonJS
+    "moduleResolution": "node",    // use node instead of bundler
+    "jsx": "react-jsx",            // JSX compile
+    "noEmit": true
+  }
+}

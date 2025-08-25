@@ -1,36 +1,180 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🌿 Murmuin
 
-## Getting Started
+A Next.js 14 app with Supabase integration for emotion tracking and user profile management. Built with App Router, server actions, and clean modular architecture.
 
-First, run the development server:
+## 🛠️ Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Auth & DB**: Supabase (PostgreSQL + Auth)
+- **Styling**: Tailwind CSS
+- **State & Logic**: React Hooks, Server Actions
+- **API Routes**: File-based API (e.g. `/api/update-profile`)
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── initialize-profile/route.ts   # Create user profile on first login
+│   │   ├── update-profile/route.ts       # Update user profile info
+│   │   └── check-username/route.ts       # Check if username is taken
+│   ├── emotion/                          # Emotion recording page
+│   ├── emotion-history/                  # Emotion history view
+│   ├── routine/                          # Routine suggestions (planned)
+│   ├── profile/                          # Profile page
+│   ├── login/                            # Supabase login page
+│   ├── callback/                         # Supabase auth callback
+│   ├── layout.tsx, page.tsx              # Global layout
+│   └── globals.css
+│
+├── components/
+│   ├── emotion/EmotionHistoryClient.tsx
+│   ├── history/HistoryClient.tsx
+│   └── profile/
+│       ├── LogoutButton.tsx
+│       └── ProfileClient.tsx            # Realtime editable profile form
+│
+├── lib/
+│   ├── supabase.ts                       # Supabase client for client-side
+│   ├── supabaseClient.ts                 # Supabase client for server-side
+│   ├── supabase-browser.ts               # Legacy browser client (optional)
+│   ├── gpt.ts                            # OpenAI integration (future use)
+│   ├── utils.ts                          # Utility functions
+│   ├── withAuth.ts                       # Route-level auth guard
+│   └── middleware.ts                     # Middleware for auth redirection
+│
+├── actions/                              # Server actions (optional / WIP)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ✅ Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- 🔐 Authenticated routes with Supabase
+- 👤 User profile creation & editing (`display_name`, `username`, etc.)
+- 🧠 Emotion log tracking (Supabase `emotion_logs`)
+- 🌎 Auto timezone detection on login
+- 🔍 Real-time username validation (with debounce)
+- 🎨 Clean client/server separation
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🔐 RLS (Row Level Security)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Enabled for:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `users`: access only own profile
+- `emotion_logs`: only access own logs
+- `routine_logs`: same as above
 
-## Deploy on Vercel
+Supabase Service Role is used only in backend route handlers (`/api/*`) to bypass RLS safely.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🧠 Database Schema Overview
+
+The application uses Supabase (PostgreSQL) with RLS enabled.
+Data is structured into four main entities:
+
+### 1. `users`
+- Stores extended profile info
+- Linked to Supabase `auth.users`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | PK (auth.users.id) |
+| display_name | text | User's display name |
+| avatar_url | text | Profile image |
+| timezone | text | Auto-detected timezone |
+| plan | text | Subscription or usage plan |
+
+---
+
+### 2. `emotion_logs`
+- Records user-submitted emotional entries
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | PK |
+| user_id | uuid | FK to `users.id` |
+| input_text | text | Raw emotion input |
+| main_emotion | text | Classified main emotion |
+| mood_tags | text[] | Extra mood tags |
+| gpt_comment | text | GPT-generated feedback |
+| recommended_routine | text | Routine ID or title |
+| created_at | timestamp | Record timestamp |
+
+---
+
+### 3. `routines`
+- Predefined self-care routines recommended via GPT
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid | PK |
+| title | text | Routine title |
+| mood_tags | text[] | Target moods |
+| steps | json | Routine steps |
+| animation_url | text | Visual guide (optional) |
+| duration_min | int | Estimated duration |
+
+---
+
+### 4. `routine_logs`
+- Records when user completes a routine
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | int8 | PK |
+| routine_id | text | FK to `routines.id` |
+| user_id | uuid | FK to `users.id` |
+| created_at | timestamptz | Timestamp of completion |
+| feedback | text | Optional feedback after routine |
+
+---
+
+📌 **Row Level Security (RLS)** is enabled on all tables.  
+Each user only has access to their own records.  
+Supabase Service Role Key is used in server-side API routes for secure elevated access (`/api/*`).
+
+---
+
+## 🚀 Getting Started
+
+1. Clone this repo
+2. Setup your `.env.local`:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+3. Run locally:
+
+```bash
+npm install
+npm run dev
+```
+
+---
+
+## 🔄 Future Roadmap
+
+- [ ] Public user profiles (`/u/:username`)
+- [ ] Custom routine generator via GPT
+- [ ] Streaks & emotion-based progress tracking
+- [ ] Realtime emotion feed
+- [ ] i18n + mobile-first UX
+
+---
+
+## 👩‍💻 Author
+
+Made with ❤️ by [Mur Mur](https://hazle.netlify.app)
+
+---
