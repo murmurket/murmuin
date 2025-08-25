@@ -1,18 +1,18 @@
+// src/app/routine/[slug]/RoutineFeedbackForm.tsx
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-export default function RoutineFeedbackForm({ routineId }: { routineId: string }) {
+export default function RoutineFeedbackForm({ routineUuid }: { routineUuid: string }) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleFeedback = async (feedback: string) => {
     setLoading(true);
-
     const formData = new FormData();
-    formData.append('routine_id', routineId);
+    formData.append('routine_uuid', routineUuid); // <-- UUID
     formData.append('feedback', feedback);
 
     try {
@@ -20,11 +20,10 @@ export default function RoutineFeedbackForm({ routineId }: { routineId: string }
         method: 'POST',
         body: formData,
       });
-
       if (!res.ok) throw new Error('Feedback failed');
 
       toast.success('Thanks! Your feedback was saved ✅');
-      router.push('/history'); // ✅ 히스토리 페이지로 이동
+      router.push('/history');
     } catch (err) {
       console.error(err);
       toast.error('Something went wrong. Please try again.');

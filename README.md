@@ -70,6 +70,7 @@ Enabled for:
 - `users`: access only own profile
 - `emotion_logs`: only access own logs
 - `routine_logs`: same as above
+- `routine`: readable public
 
 Supabase Service Role is used only in backend route handlers (`/api/*`) to bypass RLS safely.
 
@@ -84,56 +85,75 @@ Data is structured into four main entities:
 - Stores extended profile info
 - Linked to Supabase `auth.users`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| id | uuid | PK (auth.users.id) |
-| display_name | text | User's display name |
-| avatar_url | text | Profile image |
-| timezone | text | Auto-detected timezone |
-| plan | text | Subscription or usage plan |
+create table public.users (
+  id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  display_name text,
+  avatar_url text,
+  role text,
+  plan text,
+  timezone text,
+  username text unique
+);
 
 ---
 
 ### 2. `emotion_logs`
 - Records user-submitted emotional entries
 
-| Field | Type | Description |
-|-------|------|-------------|
-| id | uuid | PK |
-| user_id | uuid | FK to `users.id` |
-| input_text | text | Raw emotion input |
-| main_emotion | text | Classified main emotion |
-| mood_tags | text[] | Extra mood tags |
-| gpt_comment | text | GPT-generated feedback |
-| recommended_routine | text | Routine ID or title |
-| created_at | timestamp | Record timestamp |
+create table public.emotion_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  input_text text,
+  main_emotion text,
+  mood_tags text[],
+  gpt_comment text,
+  recommended_routine text,         -- human-friendly slug (legacy/backward compatibility)
+  recommended_routine_uuid uuid references public.routines(id)
+    on update cascade on delete restrict,
+  created_at timestamptz default now()
+);
+
+create index if not exists emotion_logs_user_created_idx
+  on public.emotion_logs(user_id, created_at desc);
 
 ---
 
 ### 3. `routines`
 - Predefined self-care routines recommended via GPT
 
-| Field | Type | Description |
-|-------|------|-------------|
-| id | uuid | PK |
-| title | text | Routine title |
-| mood_tags | text[] | Target moods |
-| steps | json | Routine steps |
-| animation_url | text | Visual guide (optional) |
-| duration_min | int | Estimated duration |
+create table public.routines (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  mood_tags text[],
+  steps jsonb,                     -- sequence of steps
+  description text,
+  animation_url text,
+  duration_min int,
+  slug text not null unique,        -- canonical slug for URLs
+  constraint routines_slug_format_chk check (slug ~ '^[a-z0-9_]+$')
+);
+
+create index if not exists routines_mood_tags_gin
+  on public.routines using gin (mood_tags);
 
 ---
 
 ### 4. `routine_logs`
 - Records when user completes a routine
 
-| Field | Type | Description |
-|-------|------|-------------|
-| id | int8 | PK |
-| routine_id | text | FK to `routines.id` |
-| user_id | uuid | FK to `users.id` |
-| created_at | timestamptz | Timestamp of completion |
-| feedback | text | Optional feedback after routine |
+create table public.routine_logs (
+  id bigserial primary key,
+  routine_uuid uuid not null references public.routines(id)
+    on update cascade on delete restrict,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz default now(),
+  feedback text
+);
+
+create index if not exists routine_logs_user_created_idx
+  on public.routine_logs(user_id, created_at desc);
 
 ---
 
